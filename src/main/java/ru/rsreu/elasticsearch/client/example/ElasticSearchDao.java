@@ -6,15 +6,19 @@ import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch._types.aggregations.AggregationRange;
 import co.elastic.clients.elasticsearch._types.aggregations.RangeBucket;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
+import co.elastic.clients.elasticsearch.core.search.Hit;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public class ElasticSearchDao implements AutoCloseable {
-    public static final String RELEVANCE_SCORE_RANGES = "relevance_score_ranges";
+    private static final String RELEVANCE_SCORE_RANGES = "relevance_score_ranges";
+    private static final String RELEVANCE_SCORE = "relevance_score";
     private static volatile ElasticSearchDao instance;
     private final ElasticsearchClient elasticsearchClient;
 
@@ -33,7 +37,7 @@ public class ElasticSearchDao implements AutoCloseable {
     @SneakyThrows
     public SearchResponse<Question> getQuestionsByMatchBoolPrefixBody(String bodyQuery,
                                                                       int minimumShouldMatch) {
-        return elasticsearchClient.search(searchBuilder ->
+        SearchResponse<Question> response = elasticsearchClient.search(searchBuilder ->
                         searchBuilder.index("e08_03_astashkin")
                                 .query(queryBuilder -> queryBuilder.matchBoolPrefix(
                                         matchBoolPrefixBuilder -> matchBoolPrefixBuilder
@@ -44,8 +48,32 @@ public class ElasticSearchDao implements AutoCloseable {
                                         fieldSortBuilder -> fieldSortBuilder.field("body")
                                                 .order(SortOrder.Desc)
                                                 .mode(SortMode.Min)
-                                )),
+                                ))
+                                .fields(fieldBuilder -> fieldBuilder.field("relevance_score")),
                 Question.class
+        );
+        setRelevanceScoreToQuestions(response);
+        return response;
+    }
+
+    private void setRelevanceScoreToQuestions(SearchResponse<Question> response) {
+        Map<String, Question> questionIdToQuestion = response.hits().hits().stream()
+                .filter(hit -> hit.source() != null && hit.source().getQuestionId() != null)
+                .collect(
+                        Collectors.toMap(
+                                hit -> hit.source().getQuestionId(),
+                                Hit::source
+                        )
+                );
+        response.hits().hits().forEach(
+                hit -> {
+                    if (hit.source() != null && hit.source().getQuestionId() != null) {
+                        double relevanceScore = Double.parseDouble(
+                                hit.fields().get(RELEVANCE_SCORE).toJson().asJsonArray().get(0).toString()
+                        );
+                        questionIdToQuestion.get(hit.source().getQuestionId()).setRelevanceScore(relevanceScore);
+                    }
+                }
         );
     }
 
@@ -54,7 +82,7 @@ public class ElasticSearchDao implements AutoCloseable {
         SearchResponse<Void> searchResponse = elasticsearchClient.search(searchBuilder -> searchBuilder.size(0)
                         .aggregations(RELEVANCE_SCORE_RANGES, aggregationBuilder -> aggregationBuilder.range(
                                 rangeAggregationBuilder -> rangeAggregationBuilder
-                                        .field("relevance_score")
+                                        .field(RELEVANCE_SCORE)
                                         .ranges(AggregationRange.of(rangeBuilder -> rangeBuilder.to(25d)),
                                                 AggregationRange.of(rangeBuilder -> rangeBuilder.from(25d).to(50d)),
                                                 AggregationRange.of(rangeBuilder -> rangeBuilder.from(50d).to(70d)),

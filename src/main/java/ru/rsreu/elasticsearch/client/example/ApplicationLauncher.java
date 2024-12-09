@@ -4,7 +4,10 @@ import co.elastic.clients.elasticsearch._types.aggregations.RangeBucket;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class ApplicationLauncher {
     private static final String SERVER_URL = "http://localhost:9200";
@@ -24,7 +27,7 @@ public class ApplicationLauncher {
     }
 
 
-    private static void printQuestionsTables(List<Question> questions) {
+    private static void printQuestionsTables(Collection<Question> questions) {
         if (questions == null || questions.isEmpty()) {
             System.out.println("No data to display.");
             return;
