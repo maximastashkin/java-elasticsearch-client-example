@@ -6,8 +6,6 @@ import co.elastic.clients.elasticsearch.core.search.Hit;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 public class ApplicationLauncher {
     private static final String SERVER_URL = "http://localhost:9200";
